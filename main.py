@@ -14,16 +14,10 @@ print("PyTorch Version: ",torch.__version__)
 print("Torchvision Version: ",torchvision.__version__)
 
 
-def print_hi(name):
-    print(f'Hi, {name}')
+def main():
+    print("loading pretrained modbilenet_v3_large")
 
-    print("loading pretrained efficientNet-b7")
-
-    # model = models.efficientnet_b7(pretrained=True)
-    # model_small = models.mobilenet_v3_small(pretrained=True)
     model = models.mobilenet_v3_large(pretrained=True)
-    # model.eval()
-    model.train()
 
     # images should be loaded as 3*H*W, with values in range [0, 1], and normalized with the following transform:
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
@@ -38,6 +32,8 @@ def print_hi(name):
     #     ])),
     #     batch_size=args.batch_size, shuffle=True,
     #     num_workers=args.workers, pin_memory=True)
+
+    # todo: create data loader
 
     # The process for obtaining the values of mean and std is roughly equivalent to:
     transform = T.Compose([T.Resize(256), T.CenterCrop(224), T.ToTensor()])
@@ -267,4 +263,4 @@ def print_hi(name):
 
 
 if __name__ == '__main__':
-    print_hi('PyCharm')
+    main()
