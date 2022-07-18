@@ -1,10 +1,10 @@
 import torch
-from RoomClassifierDataset import RoomClassifierDataset
+from RoomClassifierDataset import EmptyRoomClassifierDataset
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, random_split, DataLoader
 import csv
-from RoomClassifierModule import RoomClassifierMobileNet
+from RoomClassifierModule import EmptyRoomClassifierMobileNet
 from RoomClassifierModule import evaluate, fit_one_cycle
 import json
 import easygui as eg
@@ -73,7 +73,7 @@ transform = T.Compose([T.Resize(256),
                        T.Normalize(*imagenet_stats)])
 
 # create dataset
-dataset = RoomClassifierDataset(data_csv, transform)
+dataset = EmptyRoomClassifierDataset(data_csv, transform)
 
 
 # this function will denormalize the tensors
@@ -87,7 +87,7 @@ def show_example(img, room_target, style_target, budget_target):
     plt.show()
 
 
-def show_test_example(img, r_target, r_pred, s_target, s_pred, b_target, b_pred, mask):
+def show_test_example(img, r_target, r_pred, s_target, s_pred, b_target, b_pred, e_target, e_pred):
     # todo: add loss
     # loss_r = nn.CrossEntropyLoss()(r_pred, r_target)
     # loss_s = nn.CrossEntropyLoss()(s_pred, s_target)
@@ -97,35 +97,17 @@ def show_test_example(img, r_target, r_pred, s_target, s_pred, b_target, b_pred,
     #loss_b = nn.BCEWithLogitsLoss()(b_pred, b_target)
 
     loss_r = nn.BCEWithLogitsLoss()(r_pred, r_target)
-    loss_s = nn.BCEWithLogitsLoss(reduction='none')(s_pred, s_target)
-    loss_s = torch.dot(loss_s.sum(1), mask.T[1]) / (1 + sum(mask.T[1]))  # todo: fix sum zero possibility
-    loss_b = nn.BCEWithLogitsLoss(reduction='none')(b_pred, b_target)
-    loss_b = torch.dot(loss_b.sum(1), mask.T[2]) / (1 + sum(mask.T[2]))  # todo: fix sum zero possibility
+    loss_s = nn.BCEWithLogitsLoss()(s_pred, s_target)
+    loss_b = nn.BCEWithLogitsLoss()(b_pred, b_target)
+    loss_e = nn.BCEWithLogitsLoss()(e_pred.flatten(), e_target)
 
-    # loss = loss_r + loss_s + loss_b
     plt.imshow(denorm(img).permute(1, 2, 0))
-    # string = (
-    #     "R_l: " + room_legend[r_target.argmax()] + " / R_p: " + room_legend[r_pred.argmax()] + f" ({(r_pred.max().cpu().numpy()*100):2.0f}%)"
-    #     + "\nS: " + style_legend[s_target.argmax()] + " / S_p: " + style_legend[s_pred.argmax()] + f" ({(s_pred.max().cpu().numpy()*100):2.0f}%)"
-    #     + "\nB: " +budget_legend[b_target.argmax()] + " / B_p: " + budget_legend[b_pred.argmax()] + f" ({(b_pred.max().cpu().numpy()*100):2.0f}%)"
-    # )
-    # string = str(
-    #     room_legend[r_target.argmax()] + " /  " + room_legend[r_pred.argmax()] + f" ({(r_pred.softmax(1).max().cpu().numpy()*100):2.0f}%)" + f" loss = {loss_r.cpu().numpy():2.2f}"
-    #     + "\n" + style_legend[s_target.argmax()] + " / " + style_legend[s_pred.argmax()] + f" ({(s_pred.softmax(1).max().cpu().numpy()*100):2.0f}%)" + f" loss = {loss_s.cpu().numpy():2.2f}"
-    #     + "\n" + budget_legend[b_target.argmax()] + " / " + budget_legend[b_pred.argmax()] + f" ({(b_pred.softmax(1).max().cpu().numpy()*100):2.0f}%)" + f" loss = {loss_b.cpu().numpy():2.2f}"
-    # )
     string = str(
         room_legend[r_target.argmax()] + " /  " + room_legend[r_pred.sigmoid().argmax()] + f" ({(r_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_r.cpu().numpy():2.2f}"
         + "\n" + style_legend[s_target.argmax()] + " / " + style_legend[s_pred.sigmoid().argmax()] + f" ({(s_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_s.cpu().numpy():2.2f}"
         + "\n" + budget_legend[b_target.argmax()] + " / " + budget_legend[b_pred.sigmoid().argmax()] + f" ({(b_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_b.cpu().numpy():2.2f}"
+        + "\n" + "Empty: " + str(bool(e_target)) + " / " + str(e_pred.sigmoid().cpu().numpy()[0][0] > 0.5) + f" ({(e_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_e.cpu().numpy():2.2f}"
     )
-    print(f"sum(r_target) = {r_target.sum()}, sum(r_pred) = {r_pred.sigmoid().sum()}")
-    print(f"sum(s_target) = {s_target.sum()}, sum(s_pred) = {s_pred.sigmoid().sum()}")
-    print(f"max(r_pred) = {r_pred.sigmoid().max()}")
-    print(f"max(s_pred) = {s_pred.sigmoid().max()}")
-    print(r_pred.sigmoid())
-    print(s_pred.sigmoid())
-    print(b_pred.sigmoid())
 
     # show predictions
     print("Room predictions:")
@@ -151,9 +133,8 @@ test_loader = DataLoader(dataset, batch_size, shuffle=True)
 test_dl = DeviceDataLoader(test_loader, device)
 
 # create net (based on mobilenetv3)
-model = RoomClassifierMobileNet(freeze_backbone=False).to(device)
-# model.load_state_dict(torch.load(r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier.pth'))
-model.load_state_dict(torch.load(r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_with_empty.pth'))
+model = EmptyRoomClassifierMobileNet(freeze_backbone=False).to(device)
+model.load_state_dict(torch.load(r'C:\Users\PC\PycharmProjects\RoomClassifier\models\empty_room_classifier_all_grad_true.pth'))
 for param in model.parameters():
     param.requires_grad = False
 
@@ -161,9 +142,9 @@ for param in model.parameters():
 model.eval()
 
 # test net output
-for x, r, s, b, m in test_dl:
-    r_pred, s_pred, b_pred = model(x)
-    show_test_example(x.squeeze().cpu(), r, r_pred, s, s_pred, b, b_pred, m)  # let's take an example
+for x, r, s, b, e in test_dl:
+    r_pred, s_pred, b_pred, e_pred = model(x)
+    show_test_example(x.squeeze().cpu(), r, r_pred, s, s_pred, b, b_pred, e, e_pred)  # let's take an example
     if eg.ccbox(msg="Test another image?"):  # show a Continue/Cancel dialog
         pass  # user chose Continue
     else:  # user chose Cancel

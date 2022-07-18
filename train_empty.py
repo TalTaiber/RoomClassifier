@@ -1,10 +1,10 @@
 import torch
-from RoomClassifierDataset import RoomClassifierDataset
+from RoomClassifierDataset import EmptyRoomClassifierDataset
 import torchvision.transforms as T
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset, random_split, DataLoader
 import csv
-from RoomClassifierModule import RoomClassifierMobileNet
+from RoomClassifierModule import EmptyRoomClassifierMobileNet
 from RoomClassifierModule import evaluate, fit_one_cycle
 import json
 
@@ -46,6 +46,8 @@ torch.manual_seed(0)  # reproducible - deterministic
 
 data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty.csv'
 legend_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\legend.csv'
+save_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds'
+load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_60iter_nosoftmax.pth'
 with open(legend_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     for ind, row in enumerate(csv_reader):
@@ -72,7 +74,7 @@ transform = T.Compose([T.Resize(256),
                        T.Normalize(*imagenet_stats)])
 
 # create dataset
-dataset = RoomClassifierDataset(data_csv, transform)
+dataset = EmptyRoomClassifierDataset(data_csv, transform)
 print(len(dataset))
 
 
@@ -81,15 +83,19 @@ def denorm(img_tensors):
     return img_tensors * imagenet_stats[1][0] + imagenet_stats[0][0]
 
 
-def show_example(img, room_target, style_target, budget_target, mask):
+def show_example(img, room_target, style_target, budget_target, empty):
+    # todo: show empty or not
     plt.imshow(denorm(img).permute(1, 2, 0))
-    plt.title("Room: " + room_legend[room_target.argmax()] + "\nStyle: " + style_legend[style_target.argmax()] + ", Budget: " + budget_legend[budget_target.argmax()])
+    plt.title("Room: " + room_legend[room_target.argmax()] +
+              "\nStyle: " + style_legend[style_target.argmax()] +
+              ", Budget: " + budget_legend[budget_target.argmax()] +
+              "\nEmpty: " + str(bool(empty)))
     plt.show()
 
 
-show_example(*dataset[0])  # let's take an example
+# show_example(*dataset[-1])  # let's take an example
 
-# val_percent = int(0.15 * len(dataset))  # setting 15 percent of the total number of images for validation
+# todo: make sure train is 50-50 empty and non-empty
 val_percent = int(0.15 * len(dataset))
 train_size = len(dataset) - val_percent
 val_size = len(dataset) - train_size
@@ -105,43 +111,42 @@ val_loader = DataLoader(val_ds, batch_size * 2)
 train_dl = DeviceDataLoader(train_loader, device)
 val_dl = DeviceDataLoader(val_loader, device)
 
+# todo: load 90iter BCElogits (apply to features and r,s,b) and freeze all except e
 # create net (based on mobilenetv3)
-model = RoomClassifierMobileNet(freeze_backbone=False).to(device)
+model = EmptyRoomClassifierMobileNet(freeze_backbone=False).to(device)
+model.load_state_dict(torch.load(load_path), strict=False)
 
-pretrained_dict = torch.load(r"C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_BCElogits.pth")
-model_dict = model.state_dict()
-
-# load only features of previous net
-pretrained_dict = {k: v for k, v in pretrained_dict.items() if k[:k.find('.')] == "features"}
-# 2. overwrite entries in the existing state dict
-model_dict.update(pretrained_dict)
-# 3. load the new state dict
-# model.load_state_dict(pretrained_dict)
-
-# model.load_state_dict(torch.load(r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_60iter_nosoftmax.pth'))
-for param in model.parameters():
-    param.requires_grad = True
+for ind, child in enumerate(model.children()):
+    if ind == 5:
+        for param in child.parameters():
+            param.requires_grad = True
+    else:
+        for param in child.parameters():
+            # param.requires_grad = False
+            param.requires_grad = True
 
 # test net output shapes
-for x, r, s, b, m in train_dl:
+for x, r, s, b, e in train_dl:
     print(x.shape)
     print(r.shape)
     print(s.shape)
     print(b.shape)
-    print(m.shape)
-    r_pred, s_pred, b_pred = model(x)
+    print(e.shape)
+    r_pred, s_pred, b_pred, e_pred = model(x)
     print(r_pred.shape)
     print(s_pred.shape)
     print(b_pred.shape)
+    print(e_pred.shape)
     break
 
 # verify model working ok
 history = []
-# print("Running validation with initial network...")
-# history += [evaluate(model, val_dl)]
+print("Running validation with initial network...")
+history += [evaluate(model, val_dl)]
+print(f"Validation done, val_loss = {history[0]['val_loss']}")
 
 # define training hyperparams
-epochs = 10
+epochs = 30
 max_lr = 1e-3  # default 1e-3
 grad_clip = 0.1
 weight_decay = 1e-4
@@ -152,11 +157,12 @@ print("Training...")
 history += fit_one_cycle(epochs, max_lr, model, train_dl, val_dl,
                          grad_clip=grad_clip,
                          weight_decay=weight_decay,
-                         opt_func=opt_func)
+                         opt_func=opt_func,
+                         save_path=save_path)
 
 # todo: change save to happen after every epoch and name should have num epochs
 # save model and history after training
-torch.save(model.state_dict(), r"C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_with_empty.pth")
+
 with open('history.json', 'w') as f:
     json.dump(history, f)
 
