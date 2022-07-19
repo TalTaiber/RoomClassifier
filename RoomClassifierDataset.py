@@ -64,8 +64,8 @@ class EmptyRoomClassifierDataset(Dataset):
         with open(data_csv) as csv_file:
             csv_reader = csv.reader(csv_file, delimiter=',')
             for ind, row in enumerate(csv_reader):
-                # if ind == 0 or ind < 350000: # TODO: remove <350000
-                if ind == 0:
+                if ind == 0 or ind < 350000: # TODO: remove <350000
+                # if ind == 0:
                     continue
                 else:
                     self.images.append(os.path.join(os.path.dirname(data_csv), row[0].replace('/', '\\')))

@@ -9,6 +9,7 @@ from RoomClassifierModule import evaluate, fit_one_cycle
 import json
 import easygui as eg
 import torch.nn as nn
+from PIL import Image
 
 
 # helper functions to load the data and model onto GPU
@@ -47,6 +48,8 @@ device = get_default_device()
 
 data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty.csv'
 legend_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\legend.csv'
+load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds.pth'
+
 with open(legend_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     for ind, row in enumerate(csv_reader):
@@ -87,7 +90,7 @@ def show_example(img, room_target, style_target, budget_target):
     plt.show()
 
 
-def show_test_example(img, r_target, r_pred, s_target, s_pred, b_target, b_pred, e_target, e_pred):
+def show_test_example(img, r_t, r_p, s_t, s_p, b_t, b_p, e_t, e_p):
     # todo: add loss
     # loss_r = nn.CrossEntropyLoss()(r_pred, r_target)
     # loss_s = nn.CrossEntropyLoss()(s_pred, s_target)
@@ -96,29 +99,32 @@ def show_test_example(img, r_target, r_pred, s_target, s_pred, b_target, b_pred,
     #loss_s = nn.BCEWithLogitsLoss()(s_pred, s_target)
     #loss_b = nn.BCEWithLogitsLoss()(b_pred, b_target)
 
-    loss_r = nn.BCEWithLogitsLoss()(r_pred, r_target)
-    loss_s = nn.BCEWithLogitsLoss()(s_pred, s_target)
-    loss_b = nn.BCEWithLogitsLoss()(b_pred, b_target)
-    loss_e = nn.BCEWithLogitsLoss()(e_pred.flatten(), e_target)
+    loss_r = nn.BCEWithLogitsLoss(reduction='none')(r_p, r_t)
+    loss_r = torch.dot(loss_r.mean(1), 1 - e_t) / (len(e_t) - sum(e_t))
+    loss_s = nn.BCEWithLogitsLoss(reduction='none')(s_p, s_t)
+    loss_s = torch.dot(loss_s.mean(1), 1 - e_t) / (len(e_t) - sum(e_t))
+    loss_b = nn.BCEWithLogitsLoss(reduction='none')(b_p, b_t)
+    loss_b = torch.dot(loss_b.mean(1), 1 - e_t) / (len(e_t) - sum(e_t))
+    loss_e = nn.BCEWithLogitsLoss()(e_p, e_t)
 
     plt.imshow(denorm(img).permute(1, 2, 0))
     string = str(
-        room_legend[r_target.argmax()] + " /  " + room_legend[r_pred.sigmoid().argmax()] + f" ({(r_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_r.cpu().numpy():2.2f}"
-        + "\n" + style_legend[s_target.argmax()] + " / " + style_legend[s_pred.sigmoid().argmax()] + f" ({(s_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_s.cpu().numpy():2.2f}"
-        + "\n" + budget_legend[b_target.argmax()] + " / " + budget_legend[b_pred.sigmoid().argmax()] + f" ({(b_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_b.cpu().numpy():2.2f}"
-        + "\n" + "Empty: " + str(bool(e_target)) + " / " + str(e_pred.sigmoid().cpu().numpy()[0][0] > 0.5) + f" ({(e_pred.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_e.cpu().numpy():2.2f}"
+        room_legend[r_t.argmax()] + " /  " + room_legend[r_p.sigmoid().argmax()] + f" ({(r_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_r.cpu().numpy():2.2f}"
+        + "\n" + style_legend[s_t.argmax()] + " / " + style_legend[s_p.sigmoid().argmax()] + f" ({(s_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_s.cpu().numpy():2.2f}"
+        + "\n" + budget_legend[b_t.argmax()] + " / " + budget_legend[b_p.sigmoid().argmax()] + f" ({(b_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_b.cpu().numpy():2.2f}"
+        + "\n" + "Empty: " + str(bool(e_t)) + " / " + str(e_p.sigmoid().cpu().numpy()[0] > 0.5) + f" ({(e_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_e.cpu().numpy():2.2f}"
     )
 
-    # show predictions
-    print("Room predictions:")
-    for ind in range(len(r_pred[0])):
-        print(f"\t{room_legend[ind]} ({100*r_pred.sigmoid()[0][ind]:2.2f}%)")
-    print("Style predictions:")
-    for ind in range(len(s_pred[0])):
-        print(f"\t{style_legend[ind]} ({100 * s_pred.sigmoid()[0][ind]:2.2f}%)")
-    print("Budget predictions:")
-    for ind in range(len(b_pred[0])):
-        print(f"\t{budget_legend[ind]} ({100 * b_pred.sigmoid()[0][ind]:2.2f}%)")
+    # # show predictions
+    # print("Room predictions:")
+    # for ind in range(len(r_p[0])):
+    #     print(f"\t{room_legend[ind]} ({100*r_p.sigmoid()[0][ind]:2.2f}%)")
+    # print("Style predictions:")
+    # for ind in range(len(s_p[0])):
+    #     print(f"\t{style_legend[ind]} ({100 * s_p.sigmoid()[0][ind]:2.2f}%)")
+    # print("Budget predictions:")
+    # for ind in range(len(b_p[0])):
+    #     print(f"\t{budget_legend[ind]} ({100 * b_p.sigmoid()[0][ind]:2.2f}%)")
 
     plt.text(20, 10, string, bbox=dict(fill=True, edgecolor='yellow', linewidth=2, facecolor='white'), size=10)
     plt.show()
@@ -134,7 +140,7 @@ test_dl = DeviceDataLoader(test_loader, device)
 
 # create net (based on mobilenetv3)
 model = EmptyRoomClassifierMobileNet(freeze_backbone=False).to(device)
-model.load_state_dict(torch.load(r'C:\Users\PC\PycharmProjects\RoomClassifier\models\empty_room_classifier_all_grad_true.pth'))
+model.load_state_dict(torch.load(load_path))
 for param in model.parameters():
     param.requires_grad = False
 
@@ -151,20 +157,36 @@ for x, r, s, b, e in test_dl:
         break
 
 
+# test image from pc
+def test_image_from_pc():
+    im_path = eg.fileopenbox(default=r"C:\Users\PC\Desktop\empty rooms\\")
+    img = Image.open(im_path)
+    img = transform(img).to(device).unsqueeze(0)
+    r_pred, s_pred, b_pred, e_pred = model(img)
+    show_test_example(img.squeeze().cpu(), r, r_pred, s, s_pred, b, b_pred, e, e_pred)
+
+
+while(True):
+    test_image_from_pc()
+    if eg.ccbox(msg="Test another image?"):  # show a Continue/Cancel dialog
+        pass  # user chose Continue
+    else:  # user chose Cancel
+        break
+
 # verify model on entire test set
 # print("Running validation with initial network...")
 # history = [evaluate(model, test_dl)]
 
-def plot_losses(history):
-    train_losses = [x.get('train_loss') for x in history]
-    val_losses = [x['val_loss'] for x in history]
-    plt.plot(train_losses, '-bx')
-    plt.plot(val_losses, '-rx')
-    plt.xlabel('epoch')
-    plt.ylabel('loss')
-    plt.legend(['Training', 'Validation'])
-    plt.title('Loss vs. No. of epochs')
-    plt.show()
+# def plot_losses(history):
+#     train_losses = [x.get('train_loss') for x in history]
+#     val_losses = [x['val_loss'] for x in history]
+#     plt.plot(train_losses, '-bx')
+#     plt.plot(val_losses, '-rx')
+#     plt.xlabel('epoch')
+#     plt.ylabel('loss')
+#     plt.legend(['Training', 'Validation'])
+#     plt.title('Loss vs. No. of epochs')
+#     plt.show()
 
 
 # plot losses

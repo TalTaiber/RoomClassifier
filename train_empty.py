@@ -46,7 +46,7 @@ torch.manual_seed(0)  # reproducible - deterministic
 
 data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty.csv'
 legend_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\legend.csv'
-save_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds'
+save_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds.pth'
 load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_60iter_nosoftmax.pth'
 with open(legend_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
