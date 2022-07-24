@@ -4,21 +4,25 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import torchvision
 
-# Calculate the accuracy of the model
-def F_score(prediction, target):
-    # todo: write multiclass F score
-    return torch.Tensor(0)
+def F_score(pred, target):
+    TP = torch.sum(pred.sigmoid()*target, dim=0)
+    FN = torch.sum((1-pred.sigmoid())*target, dim=0)
+    FP = torch.sum(pred.sigmoid()*(1-target), dim=0)
+    # TN = torch.sum((1-pred.sigmoid())*(1-target), dim=0)
+
+    # acc_smooth = (TP+TN)/(FP+FN+TP+TN)
+    prec_smooth = (TP)/(FP+TP)
+    rec_smooth = (TP)/(FN+TP)
+
+    F_smooth = 2*(prec_smooth*rec_smooth)/(prec_smooth+rec_smooth)
+
+    return F_smooth.mean()
 
 
 class RoomClassifierBase(nn.Module):
     def training_step(self, batch):
         images, r_t, s_t, b_t, e_t = batch
         r_p, s_p, b_p, e_p = self(images)  # Generate predictions
-
-        # loss_r = nn.BCEWithLogitsLoss()(r_p, r_t)
-        # loss_s = nn.BCEWithLogitsLoss()(s_p, s_t)
-        # loss_b = nn.BCEWithLogitsLoss()(b_p, b_t)
-        # loss_e = nn.BCEWithLogitsLoss()(e_p.flatten(), e_t)
 
         loss_r = nn.BCEWithLogitsLoss(reduction='none')(r_p, r_t)
         loss_r = torch.dot(loss_r.mean(1), 1-e_t)/(len(e_t) - sum(e_t))
@@ -27,6 +31,13 @@ class RoomClassifierBase(nn.Module):
         loss_b = nn.BCEWithLogitsLoss(reduction='none')(b_p, b_t)
         loss_b = torch.dot(loss_b.mean(1), 1-e_t)/(len(e_t) - sum(e_t))
         loss_e = nn.BCEWithLogitsLoss()(e_p, e_t)
+
+        F_r = F_score(r_p, r_t)
+        F_b = F_score(b_p, b_t)
+        F_s = F_score(s_p, s_t)
+        F_e = F_score(e_p, e_t)
+        F_tot = (F_r + F_b + F_s + F_e)/4
+        loss_F = 1 - F_tot
 
         loss = loss_r + loss_s + loss_b + loss_e
 
@@ -36,11 +47,6 @@ class RoomClassifierBase(nn.Module):
         images, r_t, s_t, b_t, e_t = batch
         r_p, s_p, b_p, e_p = self(images)  # Generate predictions
 
-        # loss_r = nn.BCEWithLogitsLoss()(r_p, r_t)
-        # loss_s = nn.BCEWithLogitsLoss()(s_p, s_t)
-        # loss_b = nn.BCEWithLogitsLoss()(b_p, b_t)
-        # loss_e = nn.BCEWithLogitsLoss()(e_p.flatten(), e_t)
-
         loss_r = nn.BCEWithLogitsLoss(reduction='none')(r_p, r_t)
         loss_r = torch.dot(loss_r.mean(1), 1-e_t)/(len(e_t) - sum(e_t))
         loss_s = nn.BCEWithLogitsLoss(reduction='none')(s_p, s_t)
@@ -49,23 +55,27 @@ class RoomClassifierBase(nn.Module):
         loss_b = torch.dot(loss_b.mean(1), 1-e_t)/(len(e_t) - sum(e_t))
         loss_e = nn.BCEWithLogitsLoss()(e_p, e_t)
 
+        F_r = F_score(r_p, r_t)
+        F_b = F_score(b_p, b_t)
+        F_s = F_score(s_p, s_t)
+        F_e = F_score(e_p, e_t)
+        F_tot = (F_r + F_b + F_s + F_e)/4
+        loss_F = 1 - F_tot
+
         loss = loss_r + loss_s + loss_b + loss_e
 
-        # todo: finish
-        score_r = F_score(1, 1)
-
-        return {'val_loss': loss.detach(), 'val_room_score': score_r.detach()}
+        return {'val_loss': loss.detach(), 'val_F_score': F_tot.detach()}
 
     def validation_epoch_end(self, outputs):
         batch_losses = [x['val_loss'] for x in outputs]
         epoch_loss = torch.stack(batch_losses).mean()       # Combine losses and get the mean value
-        batch_scores = [x['val_room_score'] for x in outputs]
+        batch_scores = [x['val_F_score'] for x in outputs]
         epoch_score = torch.stack(batch_scores).mean()      # Combine accuracies and get the mean value
-        return {'val_loss': epoch_loss.item(), 'val_score': epoch_score.item()}
+        return {'val_loss': epoch_loss.item(), 'val_F_score': epoch_score.item()}
 
     # display the losses
     def epoch_end(self, epoch, result):
-        print("Epoch [{}], last_lr: {:.4f}, train_loss: {:.4f}, val_loss: {:.4f}".format(epoch, result['lrs'][-1], result['train_loss'], result['val_loss']))
+        print("Epoch [{}], last_lr: {:.4f}, train_loss: {:.4f}, val_loss: {:.4f}, val_F: {:.4f}".format(epoch, result['lrs'][-1], result['train_loss'], result['val_loss'], result['val_F_score']))
 
 
 @torch.no_grad()

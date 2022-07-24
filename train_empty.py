@@ -44,10 +44,10 @@ class DeviceDataLoader():
 device = get_default_device()
 torch.manual_seed(0)  # reproducible - deterministic
 
-data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty.csv'
+data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty_with_apartments.csv'
 legend_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\legend.csv'
-save_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds.pth'
-load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_60iter_nosoftmax.pth'
+save_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\rc_with_empty_with_apartments_F_loss.pth'
+load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\empty_room_classifier_all_grad_true.pth'
 with open(legend_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
     for ind, row in enumerate(csv_reader):
@@ -143,10 +143,10 @@ for x, r, s, b, e in train_dl:
 history = []
 print("Running validation with initial network...")
 history += [evaluate(model, val_dl)]
-print(f"Validation done, val_loss = {history[0]['val_loss']}")
+print(f"Validation done, val_loss = {history[0]['val_loss']:2.3f}, val_F_score = {history[0]['val_F_score']:1.3f}")
 
 # define training hyperparams
-epochs = 30
+epochs = 10
 max_lr = 1e-3  # default 1e-3
 grad_clip = 0.1
 weight_decay = 1e-4

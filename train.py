@@ -108,11 +108,11 @@ val_dl = DeviceDataLoader(val_loader, device)
 # create net (based on mobilenetv3)
 model = RoomClassifierMobileNet(freeze_backbone=False).to(device)
 
-pretrained_dict = torch.load(r"C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_BCElogits.pth")
+pretrained_dict = torch.load(r"C:\Users\PC\PycharmProjects\RoomClassifier\models\empty_room_classifier_all_grad_true.pth")
 model_dict = model.state_dict()
 
 # load only features of previous net
-pretrained_dict = {k: v for k, v in pretrained_dict.items() if k[:k.find('.')] == "features"}
+# pretrained_dict = {k: v for k, v in pretrained_dict.items() if k[:k.find('.')] == "features"}
 # 2. overwrite entries in the existing state dict
 model_dict.update(pretrained_dict)
 # 3. load the new state dict
@@ -137,8 +137,8 @@ for x, r, s, b, m in train_dl:
 
 # verify model working ok
 history = []
-# print("Running validation with initial network...")
-# history += [evaluate(model, val_dl)]
+print("Running validation with initial network...")
+history += [evaluate(model, val_dl)]
 
 # define training hyperparams
 epochs = 10
@@ -156,7 +156,7 @@ history += fit_one_cycle(epochs, max_lr, model, train_dl, val_dl,
 
 # todo: change save to happen after every epoch and name should have num epochs
 # save model and history after training
-torch.save(model.state_dict(), r"C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_with_empty.pth")
+torch.save(model.state_dict(), r"C:\Users\PC\PycharmProjects\RoomClassifier\models\rc_with_empty_with_apartments_F_loss.pth")
 with open('history.json', 'w') as f:
     json.dump(history, f)
 

@@ -48,7 +48,7 @@ device = get_default_device()
 
 data_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\data_with_empty.csv'
 legend_csv = r'C:\Users\PC\UR\room_classifier_houzz_dataset\legend.csv'
-load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\rc_with_empty_with_apartments_F_loss.pth'
+load_path = r'C:\Users\PC\PycharmProjects\RoomClassifier\models\room_classifier_90iter_all_grads_empty_full_ds.pth'
 
 with open(legend_csv) as csv_file:
     csv_reader = csv.reader(csv_file, delimiter=',')
@@ -107,12 +107,18 @@ def show_test_example(img, r_t, r_p, s_t, s_p, b_t, b_p, e_t, e_p):
     loss_b = torch.dot(loss_b.mean(1), 1 - e_t) / (len(e_t) - sum(e_t))
     loss_e = nn.BCEWithLogitsLoss()(e_p, e_t)
 
+    if r_p.sigmoid().argmax() == r_t.argmax():
+        print("ok")
+
+    F = F_score(r_p, r_t)
+
     plt.imshow(denorm(img).permute(1, 2, 0))
     string = str(
         room_legend[r_t.argmax()] + " /  " + room_legend[r_p.sigmoid().argmax()] + f" ({(r_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_r.cpu().numpy():2.2f}"
         + "\n" + style_legend[s_t.argmax()] + " / " + style_legend[s_p.sigmoid().argmax()] + f" ({(s_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_s.cpu().numpy():2.2f}"
         + "\n" + budget_legend[b_t.argmax()] + " / " + budget_legend[b_p.sigmoid().argmax()] + f" ({(b_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_b.cpu().numpy():2.2f}"
         + "\n" + "Empty: " + str(bool(e_t)) + " / " + str(e_p.sigmoid().cpu().numpy()[0] > 0.5) + f" ({(e_p.sigmoid().max().cpu().numpy() * 100):2.0f}%)" + f" loss = {loss_e.cpu().numpy():2.2f}"
+        + "\n" + f"F_score = {F:1.3f}"
     )
 
     # # show predictions
@@ -128,6 +134,22 @@ def show_test_example(img, r_t, r_p, s_t, s_p, b_t, b_p, e_t, e_p):
 
     plt.text(20, 10, string, bbox=dict(fill=True, edgecolor='yellow', linewidth=2, facecolor='white'), size=10)
     plt.show()
+
+
+def F_score(pred, target):
+    TP = torch.sum(pred.sigmoid()*target, dim=0)
+    FN = torch.sum((1-pred.sigmoid())*target, dim=0)
+    FP = torch.sum(pred.sigmoid()*(1-target), dim=0)
+    TN = torch.sum((1-pred.sigmoid())*(1-target), dim=0)
+
+    # acc_smooth = (TP+TN)/(FP+FN+TP+TN)
+    prec_smooth = (TP)/(FP+TP)
+    rec_smooth = (TP)/(FN+TP)
+
+    F_smooth = 2*(prec_smooth*rec_smooth)/(prec_smooth+rec_smooth)
+
+    return F_smooth.mean()
+
 
 # show_example(*dataset[0])  # let's take an example
 
@@ -164,7 +186,6 @@ def test_image_from_pc():
     img = transform(img).to(device).unsqueeze(0)
     r_pred, s_pred, b_pred, e_pred = model(img)
     show_test_example(img.squeeze().cpu(), r, r_pred, s, s_pred, b, b_pred, e, e_pred)
-
 
 while(True):
     test_image_from_pc()
